@@ -145,16 +145,7 @@ public class SensorAndTimeOperator {
                     }
                 });
 
-        outputStream.map(new MapFunction<WindowedIllumination, WindowedIllumination>() {
-            @Override
-            public WindowedIllumination map(WindowedIllumination item) throws Exception {
-                if (item.IsWarning) {
-                    String message = "照明设备" + item.Name + "存在灯光开启无人值守情况";
-                    PostMessage.PostWarningMessage(item.Name, message, item.TimeStamp);
-                }
-                return item;
-            }
-        });
+        outputStream.map(new PostMessage(parameter.Warning, logger));
 
         Sink(outputStream);
 
