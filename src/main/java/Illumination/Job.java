@@ -18,8 +18,7 @@ public class Job {
             case onlySensorSchedule:
                 break;
             case sensorAndTime:
-//                SensorAndTimeOperator.Run(parameters);
-                PostMessage.PostWarningMessage("4F", "测试发送message", 1669267795341L);
+                SensorAndTimeOperator.Run(parameters);
                 break;
             default:
                 break;
@@ -39,9 +38,6 @@ public class Job {
         if (task == null) throw new Exception("无法查询任务详情,body:" + result.getBody());
         ExternalTask parameters = task.getJSONObject("parametersJson").toJavaObject(ExternalTask.class);
         parameters.TaskId = task.getString("id");
-
-        //注册消息推送的参数
-        PostMessage.SetWarningParameters(parameters.Warning);
 
         return parameters;
     }
