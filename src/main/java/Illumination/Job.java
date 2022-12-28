@@ -1,6 +1,7 @@
 package Illumination;
 
 import Illumination.models.ExternalTask;
+import Illumination.operators.OnlySensorOperator;
 import Illumination.operators.SensorAndTimeOperator;
 import Illumination.utils.PostMessage;
 import com.alibaba.fastjson.JSONObject;
@@ -16,6 +17,7 @@ public class Job {
             case onlyTimeSchedule:
                 break;
             case onlySensorSchedule:
+                OnlySensorOperator.Run(parameters);
                 break;
             case sensorAndTime:
                 SensorAndTimeOperator.Run(parameters);
