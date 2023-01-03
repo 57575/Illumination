@@ -1,26 +1,33 @@
 package Illumination.operators;
 
-import Illumination.function.OpeningApertureFilterInvalidFunction;
-import Illumination.function.RedisSourceFunction;
-import Illumination.function.SourceFunction;
+import Illumination.function.Redises.OccRedisMapFunction;
+import Illumination.function.Redises.OpeningApertureRedisMapFunction;
+import Illumination.function.Redises.RedisSourceFunction;
 import Illumination.models.ExternalTask;
+import Illumination.models.WindowedIllumination;
+import Illumination.models.orgins.OccCubeModels;
+import Illumination.models.orgins.OpeningApertureCubeModels;
 import com.alibaba.fastjson.JSONObject;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.CoGroupFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.TimeZone;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class OnlySensorOperator {
-
-    private static String kafkaServer;
-    private static String renganGroup;
-    private static String kaiduGroup;
 
     private static String taskId;
 
@@ -59,12 +66,79 @@ public class OnlySensorOperator {
                 RestartStrategies.fixedDelayRestart(5, org.apache.flink.api.common.time.Time.of(1, TimeUnit.MINUTES)));
         env.setParallelism(1);
 
-        //获取源
-        DataStream<String> openingApertureDS = env
-                .addSource(new RedisSourceFunction(redisUrl, redisPassword, redisDb, kaiduKey, logger))
-                .name(taskId);
 
-        openingApertureDS.print();
+        //获取源
+        DataStream<OpeningApertureCubeModels> openingApertureDS = env
+                .addSource(new RedisSourceFunction(redisUrl, redisPassword, redisDb, kaiduKey, projectId, logger))
+                .name(taskId + "openingAperture")
+                .flatMap(new OpeningApertureRedisMapFunction(logger))
+                .assignTimestampsAndWatermarks(WatermarkStrategy.<OpeningApertureCubeModels>forBoundedOutOfOrderness(Duration.ofSeconds(5)).withTimestampAssigner((e, t) -> e.Time.getTime()));
+
+
+        DataStream<OccCubeModels> occDS = env
+                .addSource(new RedisSourceFunction(redisUrl, redisPassword, redisDb, renganKey, projectId, logger))
+                .name(taskId + "occ")
+                .flatMap(new OccRedisMapFunction(logger))
+                .assignTimestampsAndWatermarks(WatermarkStrategy.<OccCubeModels>forBoundedOutOfOrderness(Duration.ofSeconds(5)).withTimestampAssigner((e, t) -> e.Time.getTime()));
+        //合并流
+        DataStream<WindowedIllumination> waitCalculateStream = openingApertureDS
+                .coGroup(occDS)
+                .where(new KeySelector<OpeningApertureCubeModels, String>() {
+                    @Override
+                    public String getKey(OpeningApertureCubeModels openingApertureCubeModels) throws Exception {
+                        return openingApertureCubeModels.Key;
+                    }
+                })
+                .equalTo(new KeySelector<OccCubeModels, String>() {
+                    @Override
+                    public String getKey(OccCubeModels occCubeModels) throws Exception {
+                        return occCubeModels.Key;
+                    }
+                })
+                .window(TumblingEventTimeWindows.of(Time.minutes(5)))
+                .apply(new CoGroupFunction<OpeningApertureCubeModels, OccCubeModels, WindowedIllumination>() {
+                    @Override
+                    public void coGroup(Iterable<OpeningApertureCubeModels> kaidus, Iterable<OccCubeModels> rengans, Collector<WindowedIllumination> collector) throws Exception {
+                        WindowedIllumination item = new WindowedIllumination();
+                        for (OpeningApertureCubeModels kaidu : kaidus) {
+                            item.SetName(kaidu.Key);
+                            item.SetOpeningApertureValue(kaidu.OpeningAperture);
+                            item.SetTimeStamp(kaidu.Time.getTime());
+                        }
+                        for (OccCubeModels rengan : rengans) {
+                            item.SetName(rengan.Key);
+                            item.SetSensorLUXValue(rengan.Lux);
+                            item.SetSensorOCCValue(rengan.Occupancy);
+                            item.SetTimeStamp(rengan.Time.getTime());
+                        }
+                        collector.collect(item);
+                    }
+                });
+
+        Map<String, Deque<WindowedIllumination>> dataDic = new HashMap<>();
+        DataStream<WindowedIllumination> outputStream = waitCalculateStream
+                .map(new MapFunction<WindowedIllumination, WindowedIllumination>() {
+                    @Override
+                    public WindowedIllumination map(WindowedIllumination item) throws Exception {
+                        if (dataDic.containsKey(item.Name)) {
+                            Deque<WindowedIllumination> deque = dataDic.get(item.Name);
+                            SensorAndTimeCalculator.Calculate(deque, item);
+                        } else {
+                            Deque<WindowedIllumination> deque = new ArrayDeque<>();
+                            SensorAndTimeCalculator.Calculate(deque, item);
+                            dataDic.put(item.Name, deque);
+                        }
+                        return item;
+                    }
+                });
+
+        waitCalculateStream.print();
+
+        try {
+            env.execute("Illumination-analysis-" + parameters.TaskId);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private static void GetParameters(ExternalTask parameters) throws Exception {

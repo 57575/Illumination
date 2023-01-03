@@ -82,5 +82,9 @@ public class WindowedIllumination {
         Message.concat("|").concat(m);
     }
 
+    @Override
+    public String toString() {
+        return com.alibaba.fastjson.JSONObject.toJSONString(this);
+    }
 
 }

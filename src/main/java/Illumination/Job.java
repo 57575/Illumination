@@ -4,9 +4,15 @@ import Illumination.models.ExternalTask;
 import Illumination.operators.OnlySensorOperator;
 import Illumination.operators.SensorAndTimeOperator;
 import Illumination.utils.PostMessage;
+import Illumination.utils.RedisSubscriber;
+import Illumination.utils.RedisSubscriberThread;
 import com.alibaba.fastjson.JSONObject;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.JedisPubSub;
 
 
 public class Job {
@@ -25,7 +31,6 @@ public class Job {
             default:
                 break;
         }
-
     }
 
     private static ExternalTask GetParameters(String[] args) throws Exception {

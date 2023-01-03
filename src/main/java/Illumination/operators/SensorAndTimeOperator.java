@@ -1,8 +1,8 @@
 package Illumination.operators;
 
+import Illumination.function.KafkaSourceFunction;
 import Illumination.function.OCCFilterInvalidFunction;
 import Illumination.function.OpeningApertureFilterInvalidFunction;
-import Illumination.function.SourceFunction;
 import Illumination.models.ExternalTask;
 import Illumination.models.WindowedIllumination;
 
@@ -13,7 +13,6 @@ import com.alibaba.fastjson.serializer.SerializerFeature;
 import org.apache.flink.api.common.functions.CoGroupFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.connector.base.DeliveryGuarantee;
@@ -63,10 +62,10 @@ public class SensorAndTimeOperator {
         env.setParallelism(1);
 
         //获取源
-        DataStream<JSONObject> openingApertureDS = SourceFunction.GetSource(env, kafkaServer, kaiduTopic, kaiduGroup, "timestamp")
+        DataStream<JSONObject> openingApertureDS = KafkaSourceFunction.GetSource(env, kafkaServer, kaiduTopic, kaiduGroup, "timestamp")
                 .filter(new OpeningApertureFilterInvalidFunction(logger));
 
-        DataStream<JSONObject> occDS = SourceFunction.GetSource(env, kafkaServer, renganTopic, renganGroup, "timestamp")
+        DataStream<JSONObject> occDS = KafkaSourceFunction.GetSource(env, kafkaServer, renganTopic, renganGroup, "timestamp")
                 .filter(new OCCFilterInvalidFunction(logger));
 
         //合并流
