@@ -7,12 +7,16 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 
+import java.util.List;
+
 public class OccRedisMapFunction implements FlatMapFunction<String, OccCubeModels> {
 
     private org.slf4j.Logger log;
+    private List<String> keys;
 
-    public OccRedisMapFunction(Logger log) {
+    public OccRedisMapFunction(Logger log, List<String> keys) {
         this.log = log;
+        this.keys = keys;
     }
 
     @Override
@@ -32,6 +36,10 @@ public class OccRedisMapFunction implements FlatMapFunction<String, OccCubeModel
         JSONObject value = item.getJSONObject("value");
         if (!value.containsKey("sensor_4")) {
             log.info("开度数据源不包含键值sensor_4,丢弃,数据:" + JSON.toJSONString(value));
+            return;
+        }
+        String key = value.getString("sensor_4");
+        if (!this.keys.contains(key)) {
             return;
         }
         OccCubeModels result = new OccCubeModels();

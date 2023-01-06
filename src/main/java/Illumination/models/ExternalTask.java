@@ -1,6 +1,7 @@
 package Illumination.models;
 
 import Illumination.enums.Operators;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
 /**
@@ -15,4 +16,5 @@ public class ExternalTask {
     public Operators Operator;
     public JSONObject OperatorParameter;
     public JSONObject Warning;
+    public JSONArray OpeningApertureList;
 }

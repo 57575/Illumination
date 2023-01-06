@@ -7,12 +7,16 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 
+import java.util.List;
+
 public class OpeningApertureRedisMapFunction implements FlatMapFunction<String, OpeningApertureCubeModels> {
 
     private org.slf4j.Logger log;
+    private List<String> keys;
 
-    public OpeningApertureRedisMapFunction(Logger logger) {
+    public OpeningApertureRedisMapFunction(Logger logger, List<String> keys) {
         this.log = logger;
+        this.keys = keys;
     }
 
     @Override
@@ -32,6 +36,10 @@ public class OpeningApertureRedisMapFunction implements FlatMapFunction<String, 
         JSONObject value = item.getJSONObject("value");
         if (!value.containsKey("switch_4")) {
             log.info("开度数据源不包含键值switch_4,丢弃,数据:" + JSON.toJSONString(value));
+            return;
+        }
+        String key = value.getString("switch_4");
+        if (!this.keys.contains(key)) {
             return;
         }
         OpeningApertureCubeModels result = new OpeningApertureCubeModels();

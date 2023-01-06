@@ -27,8 +27,12 @@ public class OccCubeModels {
         }
 
         Object occ = entity.get("occupancy");
-        if (occ instanceof Boolean) {
-            this.Occupancy = entity.getBooleanValue("occupancy");
+        if (occ instanceof Number) {
+            if ((int) occ == 0) {
+                this.Occupancy = false;
+            } else {
+                this.Occupancy = true;
+            }
         }
 
         String timeStr = entity.getString("time");

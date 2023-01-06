@@ -28,14 +28,11 @@ public class WindowedIllumination {
     }
 
     /**
-     * 计算开度的均值并赋值
+     * 开度值，总是采用最后一个数据
      */
     public void SetOpeningApertureValue(double value) {
-        if (OriginalData.containsKey("OpeningAperture")) {
-            double last = OriginalData.getDouble("OpeningAperture");
-            OriginalData.put("OpeningAperture", (value + last) / 2);
-        } else {
-            OriginalData.put("OpeningAperture", value);
+        OriginalData.put("OpeningAperture", value);
+        if (value > 0) {
         }
     }
 
@@ -79,7 +76,7 @@ public class WindowedIllumination {
     }
 
     public void AppendMessage(String m) {
-        Message.concat("|").concat(m);
+        Message = Message.isEmpty() ? m : Message.concat("|").concat(m);
     }
 
     @Override
