@@ -14,6 +14,25 @@ public class OccCubeModels {
     public double Lux;
     public int ProjectId;
 
+    public OccCubeModels() {
+    }
+
+    public OccCubeModels(String key, int projectId) {
+        this.Key = key;
+        this.ProjectId = projectId;
+        this.Lux = 0;
+        this.Time = new Date(0L);
+        this.Occupancy = false;
+    }
+
+    public OccCubeModels(String key, int project, boolean occ, double lux, long time) {
+        Key = key;
+        ProjectId = project;
+        Occupancy = occ;
+        Lux = lux;
+        Time = new Date(time);
+    }
+
     /**
      * 将redis的数据结构转换
      */
@@ -44,8 +63,21 @@ public class OccCubeModels {
         }
     }
 
+    /**
+     * 将一条人感数据和本数据聚合
+     */
+    public void Reduce(OccCubeModels entity) {
+        if (this.Time.before(entity.Time)) {
+            this.Time = entity.Time;
+        }
+        this.Lux = (entity.Lux + this.Lux) / 2.0;
+        //false的人感才会被替代
+        this.Occupancy = this.Occupancy || entity.Occupancy;
+    }
+
     @Override
     public String toString() {
         return com.alibaba.fastjson.JSONObject.toJSONString(this);
     }
+
 }

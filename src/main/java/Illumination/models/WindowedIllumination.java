@@ -6,7 +6,6 @@ public class WindowedIllumination {
     public String Name;
     public long TimeStamp;
     public String TimeStr;
-
     public boolean IsWarning;
     /**
      * 应当包括
@@ -15,8 +14,10 @@ public class WindowedIllumination {
      * <p>SensorLUX        照度,double;</p>
      */
     public JSONObject OriginalData;
-
     public String Message;
+
+    public long FirstOpenTime;
+    public String Strategy;
 
     public WindowedIllumination() {
         Name = "";
@@ -25,6 +26,8 @@ public class WindowedIllumination {
         IsWarning = false;
         OriginalData = new JSONObject();
         Message = "";
+        FirstOpenTime = 0;
+        Strategy = "";
     }
 
     /**
@@ -32,8 +35,6 @@ public class WindowedIllumination {
      */
     public void SetOpeningApertureValue(double value) {
         OriginalData.put("OpeningAperture", value);
-        if (value > 0) {
-        }
     }
 
     /**
@@ -77,6 +78,18 @@ public class WindowedIllumination {
 
     public void AppendMessage(String m) {
         Message = Message.isEmpty() ? m : Message.concat("|").concat(m);
+    }
+
+    public void SetOpenAndTime(double value, long time) {
+        OriginalData.put("OpeningAperture", value);
+    }
+
+    public void setFirstOpenTime(long firstOpenTime) {
+        FirstOpenTime = firstOpenTime;
+    }
+
+    public void setStrategy(String strategy) {
+        Strategy = strategy;
     }
 
     @Override
