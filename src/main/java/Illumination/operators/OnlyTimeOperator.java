@@ -1,12 +1,10 @@
 package Illumination.operators;
 
-import Illumination.function.Redises.OccRedisMapFunction;
 import Illumination.function.Redises.OpeningApertureRedisMapFunction;
 import Illumination.function.Redises.RedisSourceFunction;
 import Illumination.function.Sink.RedisSinkFunction;
 import Illumination.function.Sink.TableSinkFunction;
 import Illumination.models.ExternalTask;
-import Illumination.models.orgins.OccCubeModels;
 import Illumination.models.orgins.OpeningApertureCubeModels;
 import Illumination.models.outputs.StrategyAbnormalRecord;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -23,17 +21,15 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
-public class SensorAndTimeOperator {
+public class OnlyTimeOperator {
     private static String taskId;
     private static String operatorName;
-    private static long programStartTime;
 
     //数据源参数
     private static String redisUrl;
     private static String redisPassword;
     private static int redisDb;
     private static String kaiduKey;
-    private static String renganKey;
 
     private static int projectId;
 
@@ -84,17 +80,9 @@ public class SensorAndTimeOperator {
                 .flatMap(new OpeningApertureRedisMapFunction(logger, sensorKeys))
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<OpeningApertureCubeModels>forMonotonousTimestamps().withTimestampAssigner((e, t) -> e.Time.getTime()));
 
-        DataStream<OccCubeModels> occDS = env
-                .addSource(new RedisSourceFunction(redisUrl, redisPassword, redisDb, renganKey, projectId, logger))
-                .name(taskId + "occ")
-                .flatMap(new OccRedisMapFunction(logger, sensorKeys))
-                .assignTimestampsAndWatermarks(WatermarkStrategy.<OccCubeModels>forMonotonousTimestamps().withTimestampAssigner((e, t) -> e.Time.getTime()));
-
-        DataStream<StrategyAbnormalRecord> recordDataStream = occDS
-                .connect(openingApertureDS)
-                .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new SensorAndTimeCalculator(programStartTime, operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
-
+        DataStream<StrategyAbnormalRecord> recordDataStream = openingApertureDS
+                .keyBy(x -> x.Key)
+                .flatMap(new OnlyTimeCalculator(operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
         recordDataStream.addSink(new TableSinkFunction(
@@ -112,6 +100,7 @@ public class SensorAndTimeOperator {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
     }
 
     private static void GetParameters(ExternalTask parameters) throws Exception {
@@ -121,7 +110,6 @@ public class SensorAndTimeOperator {
             redisPassword = System.getenv("REDIS_PASSWORD");
             redisDb = parameters.OperatorParameter.getInteger("RedisDb");
             kaiduKey = parameters.OperatorParameter.getString("OpeningAperture");
-            renganKey = parameters.OperatorParameter.getString("OccupancyCubeId");
             hourStart = parameters.OperatorParameter.getInteger("HourStart");
             hourEnd = parameters.OperatorParameter.getInteger("HourEnd");
             minuteStart = parameters.OperatorParameter.getInteger("MinuteStart");
@@ -133,7 +121,6 @@ public class SensorAndTimeOperator {
             sensorPower = parameters.SensorPower;
             carbonEmissionFactor = parameters.CarbonEmission.getDouble("Factor");
             operatorName = parameters.Operator.name();
-            programStartTime = System.currentTimeMillis();
             receiverJsonStr = parameters.Warning.getJSONArray("Receivers").toJSONString();
             templateId = parameters.Warning.getString("TemplateId");
             warningHost = parameters.Warning.getString("Host");

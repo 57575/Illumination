@@ -211,7 +211,7 @@ public class OnlySensorOperator {
             redisPassword = System.getenv("REDIS_PASSWORD");
             redisDb = parameters.OperatorParameter.getInteger("RedisDb");
             kaiduKey = parameters.OperatorParameter.getString("OpeningAperture");
-            renganKey = parameters.OperatorParameter.getString("OCCSensor");
+            renganKey = parameters.OperatorParameter.getString("OccupancyCubeId");
             projectId = parameters.ProjectId;
             cubeHost = System.getenv("WEB_URL");
             cubeId = parameters.OperatorParameter.getString("CubeId");

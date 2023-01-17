@@ -2,18 +2,15 @@ package Illumination;
 
 import Illumination.models.ExternalTask;
 import Illumination.operators.OnlySensorOperator;
+import Illumination.operators.OnlyTimeOperator;
+import Illumination.operators.SensorAndTimeCalculator;
 import Illumination.operators.SensorAndTimeOperator;
-import Illumination.utils.PostDataTable;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 public class Job {
@@ -24,6 +21,7 @@ public class Job {
         GetSensorsPower(parameters);
         switch (parameters.Operator) {
             case 仅排程:
+                OnlyTimeOperator.Run(parameters);
                 break;
             case 仅传感器:
                 OnlySensorOperator.Run(parameters);
