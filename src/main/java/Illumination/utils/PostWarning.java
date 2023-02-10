@@ -26,6 +26,7 @@ public class PostWarning {
                     .body(GetBody(message, item.Time, receiversJsonStr))
                     .asString();
             log.info("发出报警:" + message + ";时间:" + item.Time + ";结果:" + response.getStatus());
+            log.info(item.toString());
             System.out.println("发出报警:" + message + ";时间:" + item.Time + ";结果:" + response.getStatus());
         } catch (Exception e) {
             log.error("发出报警失败:" + e.getMessage());

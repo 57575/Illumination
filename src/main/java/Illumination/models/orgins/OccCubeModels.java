@@ -3,11 +3,13 @@ package Illumination.models.orgins;
 
 import com.alibaba.fastjson.JSONObject;
 
+import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class OccCubeModels {
+public class OccCubeModels implements Serializable {
+    private static final long serialVersionUID = -2981062924379577969L;
     public boolean Occupancy;
     public Date Time;
     public String Key;

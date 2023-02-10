@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 public class TableSinkFunction extends RichSinkFunction<StrategyAbnormalRecord> {
 
 
+    private static final long serialVersionUID = 7189887362248109131L;
     private final Logger log;
     private final String tableHost;
     private final String tableName;

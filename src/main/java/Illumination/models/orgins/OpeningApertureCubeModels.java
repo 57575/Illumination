@@ -2,11 +2,13 @@ package Illumination.models.orgins;
 
 import com.alibaba.fastjson.JSONObject;
 
+import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class OpeningApertureCubeModels {
+public class OpeningApertureCubeModels implements Serializable {
+    private static final long serialVersionUID = 8256716618301012433L;
     public Date Time;
     public String Key;
     public int ProjectId;

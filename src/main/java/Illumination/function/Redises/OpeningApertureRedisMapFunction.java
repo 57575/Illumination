@@ -11,6 +11,7 @@ import java.util.List;
 
 public class OpeningApertureRedisMapFunction implements FlatMapFunction<String, OpeningApertureCubeModels> {
 
+    private static final long serialVersionUID = -6689428830135296464L;
     private org.slf4j.Logger log;
     private List<String> keys;
 

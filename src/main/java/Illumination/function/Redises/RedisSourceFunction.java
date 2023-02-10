@@ -10,6 +10,7 @@ import java.util.Map;
 
 public class RedisSourceFunction extends RichSourceFunction<String> {
 
+    private static final long serialVersionUID = 3761539055860688881L;
     private final String redisUrl;
     private final String redisPassword;
     private final int redisDb;
@@ -36,7 +37,7 @@ public class RedisSourceFunction extends RichSourceFunction<String> {
 
     @Override
     public void run(SourceContext<String> sourceContext) throws Exception {
-        log.info("RedisSourceFunction Run");
+        log.info("RedisSourceFunction Run, channel is " + channel);
         if (jedis == null) {
             jedis = new Jedis(redisUrl, 6379);
             jedis.auth(redisPassword);

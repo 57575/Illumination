@@ -10,6 +10,7 @@ import org.apache.flink.util.Collector;
 import java.util.*;
 
 public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels, OpeningApertureCubeModels, StrategyAbnormalRecord> {
+    private static final long serialVersionUID = -1203496215980446751L;
     //匹配队列
     private final Map<String, Queue<OccCubeModels>> occMap;
     private final Map<String, OpeningApertureCubeModels> lastOpeningAperture;
@@ -27,7 +28,6 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
 
 
     public SensorAndTimeCalculator(
-            long programStartTime,
             String operatorName,
             Map<String, Double> sensorPower,
             double carbonEmissionFactor,
@@ -39,7 +39,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
         occMap = new HashMap<>();
         lastOpeningAperture = new HashMap<>();
         unfinishedRecords = new HashMap<>();
-        this.programStart = programStartTime;
+        this.programStart = System.currentTimeMillis();
         this.operator = operatorName;
         this.sensorPower = sensorPower;
         this.carbonEmissionFactor = carbonEmissionFactor;
@@ -59,7 +59,8 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
         boolean lastOpenValue = false;
         if (lastOpeningAperture.containsKey(item.Key)) {
             lastOpenObject = lastOpeningAperture.get(item.Key);
-            lastOpenValue = lastOpenObject.OpeningAperture >= 0.5;
+            //开度大于5才认为是开启
+            lastOpenValue = lastOpenObject.OpeningAperture >= 5;
         }
 
         //过时数据退队
@@ -83,12 +84,12 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
         }
         //当前人感为假
         else {
-            //上个开度为开 && 不在排程内，即非工作时间 && 过去二十分钟没有人感为真 && 没有等待结束的事件 && 上一个开度达到时间在该人感数据到达时间的10秒前 && 程序已运行超20分钟
+            //上个开度为开 && 不在排程内，即非工作时间 && 过去二十分钟没有人感为真 && 没有等待结束的事件 && 上一个开度达到时间在该人感数据到达时间的60秒前 && 程序已运行超20分钟
             if (lastOpenValue
                     && (!InSchedule(item.Time.getTime()))
                     && occQueue.isEmpty()
                     && (!waitClose)
-                    && (lastOpenObject.Time.getTime() + 10 * 1000 < item.Time.getTime())
+                    && (lastOpenObject.Time.getTime() + 60 * 1000 < item.Time.getTime())
                     && (programStart + 20 * 60 * 1000 < item.Time.getTime())
             ) {
                 JSONObject originalData = new JSONObject();
@@ -100,7 +101,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
                         "照明系统",
                         item.Key,
                         operator,
-                        "",
+                        "programStartTime:" + programStart,
                         originalData);
                 unfinishedRecords.put(item.Key, record);
                 collector.collect(record);
@@ -111,8 +112,8 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
     @Override
     public void flatMap2(OpeningApertureCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
         lastOpeningAperture.put(item.Key, item);
-        //有未结束的异常事件;开度小于0.5;尝试结束异常事件
-        if (unfinishedRecords.containsKey(item.Key) && item.OpeningAperture <= 0.5) {
+        //有未结束的异常事件;开度小于5;尝试结束异常事件
+        if (unfinishedRecords.containsKey(item.Key) && item.OpeningAperture < 5) {
             StrategyAbnormalRecord record = unfinishedRecords.get(item.Key);
             record.SetFinish(item.Time.getTime());
             record.SetCarbon(CalculateCarbonEmission(item.Key, CalculateNextStartGap(item.Time.getTime())), "kg");

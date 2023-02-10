@@ -25,7 +25,6 @@ public class OnlySensorOperator {
 
     private static String taskId;
     private static String operatorName;
-    private static long programStartTime;
 
     //数据源参数
     private static String redisUrl;
@@ -86,7 +85,7 @@ public class OnlySensorOperator {
         DataStream<StrategyAbnormalRecord> recordDataStream = occDS
                 .connect(openingApertureDS)
                 .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new OnlySensorCalculator(programStartTime, operatorName, sensorPower, carbonEmissionFactor));
+                .flatMap(new OnlySensorCalculator(operatorName, sensorPower, carbonEmissionFactor));
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
         recordDataStream.addSink(new TableSinkFunction(
@@ -98,105 +97,6 @@ public class OnlySensorOperator {
                 templateId,
                 logger
         ));
-
-
-//        openingApertureDS.flatMap(new OpeningApertureMapFunction(unfinishedRecords, last20minuteOcc, lastOpeningAperture));
-//
-//        occDS
-//                .keyBy(x -> x.Key)
-//                .window(TumblingEventTimeWindows.of(Time.minutes(1)))
-//                .process(new OccupancyWindowFunction(unfinishedRecords, last20minuteOcc, lastOpeningAperture, OperatorName));
-
-
-        //合并流
-//        DataStream<StrategyAbnormalRecord> waitCalculateStream = openingApertureDS
-//                .coGroup(occDS)
-//                .where(new KeySelector<OpeningApertureCubeModels, String>() {
-//                    @Override
-//                    public String getKey(OpeningApertureCubeModels openingApertureCubeModels) throws Exception {
-//                        return openingApertureCubeModels.Key;
-//                    }
-//                })
-//                .equalTo(new KeySelector<OccCubeModels, String>() {
-//                    @Override
-//                    public String getKey(OccCubeModels occCubeModels) throws Exception {
-//                        return occCubeModels.Key;
-//                    }
-//                })
-//                .window(TumblingEventTimeWindows.of(Time.minutes(1)))
-//                .apply(new CoGroupFunction<OpeningApertureCubeModels, OccCubeModels, StrategyAbnormalRecord>() {
-//                    @Override
-//                    public void coGroup(Iterable<OpeningApertureCubeModels> kaidus, Iterable<OccCubeModels> rengans, Collector<StrategyAbnormalRecord> collector) throws Exception {
-//                        System.out.println("开始聚合窗口,时间:" + System.currentTimeMillis());
-//
-//                        String key = "";
-//                        boolean hasKaidu = kaidus.iterator().hasNext();
-//                        boolean hasRengan = rengans.iterator().hasNext();
-//
-//                        if (hasKaidu) {
-//                            key = kaidus.iterator().next().Key;
-//                        }
-//        if (hasRengan) {
-//            //寻找key
-//            key = rengans.iterator().next().Key;
-//            //聚合本时间窗的人感数据，并添加至聚合Map
-//            OccCubeModels reducedRengan = rengans.iterator().next();
-//            for (OccCubeModels rengan : rengans) {
-//                reducedRengan.Reduce(rengan);
-//                System.out.println(rengan.toString());
-//            }
-//            WindowedOcc windowedOcc = new WindowedOcc();
-//            if (last20minuteOcc.containsKey(key)) {
-//                windowedOcc = last20minuteOcc.get(key);
-//            }
-//            windowedOcc.AddNewItem(reducedRengan);
-//            last20minuteOcc.put(key, windowedOcc);
-//            System.out.println(windowedOcc.toString());
-//            System.out.println(last20minuteOcc.toString());
-//        }
-//                        //有前20分钟的任意人感数据，才判断是否为异常事件
-//                        if (last20minuteOcc.containsKey(key)) {
-//                            WindowedOcc last20Occ = last20minuteOcc.get(key);
-//                            for (OpeningApertureCubeModels kaidu : kaidus) {
-//                                System.out.println(kaidu.toString());
-//
-//                                boolean waitClose = unfinishedRecords.containsKey(key);
-//                                //开度为开启，包括了过去20分钟的人感，过去20分钟人感皆为假,没有等待关闭的事件，此时应当发出报警
-//                                if (kaidu.OpeningAperture > 0.5 && last20Occ.Duration >= 20 * 60 * 1000 && (!last20Occ.Occupancy) && (!waitClose)) {
-//                                    JSONObject originalData = new JSONObject();
-//                                    originalData.put("OpeningAperture", kaidu);
-//                                    originalData.put("Occupancy", last20Occ);
-//                                    StrategyAbnormalRecord record = new StrategyAbnormalRecord(
-//                                            kaidu.Time.getTime(),
-//                                            "无人值守",
-//                                            "照明系统",
-//                                            kaidu.Key,
-//                                            OperatorName,
-//                                            "",
-//                                            originalData);
-//                                    unfinishedRecords.put(key, record);
-//                                    PostWarning.PostWarningMessage(parameters.Warning, record, logger);
-//                                    System.out.println("产生报警事件");
-//                                    System.out.println(record.toString());
-//                                }
-//                                //开度为关闭，且有待关闭的事件
-//                                if (kaidu.OpeningAperture < 0.5 && waitClose) {
-//                                    StrategyAbnormalRecord record = unfinishedRecords.get(key);
-//                                    record.SetFinish(kaidu.Time.getTime());
-//                                    record.SetCarbon(1, "kg");
-//                                    collector.collect(record);
-//                                    unfinishedRecords.remove(key);
-//                                    System.out.println("关闭报警事件");
-//                                    System.out.println(record.toString());
-//                                }
-//                            }
-//                        }
-//                        System.out.println("结束聚合窗口,时间:" + System.currentTimeMillis());
-//                    }
-//                });
-//
-//        waitCalculateStream.print();
-
         try {
             env.execute("Illumination-analysis-" + parameters.TaskId);
         } catch (Exception e) {
@@ -219,7 +119,6 @@ public class OnlySensorOperator {
             sensorPower = parameters.SensorPower;
             carbonEmissionFactor = parameters.CarbonEmission.getDouble("Factor");
             operatorName = parameters.Operator.name();
-            programStartTime = System.currentTimeMillis();
             receiverJsonStr = parameters.Warning.getJSONArray("Receivers").toJSONString();
             templateId = parameters.Warning.getString("TemplateId");
             warningHost = parameters.Warning.getString("Host");

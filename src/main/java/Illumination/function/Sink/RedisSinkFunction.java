@@ -10,6 +10,7 @@ import redis.clients.jedis.Pipeline;
 
 public class RedisSinkFunction extends RichSinkFunction<StrategyAbnormalRecord> {
 
+    private static final long serialVersionUID = -8429053747787023127L;
     private final String redisUrl;
     private final String redisPassword;
     private final int redisDb;

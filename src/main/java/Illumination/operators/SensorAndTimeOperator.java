@@ -26,7 +26,6 @@ import java.util.concurrent.TimeUnit;
 public class SensorAndTimeOperator {
     private static String taskId;
     private static String operatorName;
-    private static long programStartTime;
 
     //数据源参数
     private static String redisUrl;
@@ -93,7 +92,7 @@ public class SensorAndTimeOperator {
         DataStream<StrategyAbnormalRecord> recordDataStream = occDS
                 .connect(openingApertureDS)
                 .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new SensorAndTimeCalculator(programStartTime, operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
+                .flatMap(new SensorAndTimeCalculator(operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
 
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
@@ -133,7 +132,6 @@ public class SensorAndTimeOperator {
             sensorPower = parameters.SensorPower;
             carbonEmissionFactor = parameters.CarbonEmission.getDouble("Factor");
             operatorName = parameters.Operator.name();
-            programStartTime = System.currentTimeMillis();
             receiverJsonStr = parameters.Warning.getJSONArray("Receivers").toJSONString();
             templateId = parameters.Warning.getString("TemplateId");
             warningHost = parameters.Warning.getString("Host");

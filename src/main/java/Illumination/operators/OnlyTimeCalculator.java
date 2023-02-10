@@ -11,6 +11,7 @@ import java.util.*;
 
 public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeModels, StrategyAbnormalRecord> {
 
+    private static final long serialVersionUID = 1213564612667547735L;
     //匹配队列
     private final Map<String, StrategyAbnormalRecord> unfinishedRecords;
     //
@@ -45,8 +46,8 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
     @Override
     public void flatMap(OpeningApertureCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
         boolean waitClose = unfinishedRecords.containsKey(item.Key);
-        //开状态进行判断
-        if (item.OpeningAperture > 0.5) {
+        //开状态进行判断,开度大于5才认为是开启
+        if (item.OpeningAperture >= 5) {
             //在排程内，即非工作时间 && 没有等待结束的事件
             if ((!InSchedule(item.Time.getTime())) && (!waitClose)) {
                 JSONObject originalData = new JSONObject();

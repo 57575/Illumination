@@ -11,6 +11,7 @@ import java.util.*;
 
 public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, OpeningApertureCubeModels, StrategyAbnormalRecord> {
 
+    private static final long serialVersionUID = 5029759832903418584L;
     private final Map<String, Queue<OccCubeModels>> occMap;
     private final Map<String, OpeningApertureCubeModels> lastOpeningAperture;
     private final Map<String, StrategyAbnormalRecord> unfinishedRecords;
@@ -19,8 +20,8 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
     private final Map<String, Double> sensorPower;
     private final double carbonEmissionFactor;
 
-    public OnlySensorCalculator(long programStartTime, String operatorName, Map<String, Double> sensorPower, double carbonEmissionFactor) {
-        programStart = programStartTime;
+    public OnlySensorCalculator(String operatorName, Map<String, Double> sensorPower, double carbonEmissionFactor) {
+        programStart = System.currentTimeMillis();
         occMap = new HashMap<>();
         lastOpeningAperture = new HashMap<>();
         unfinishedRecords = new HashMap<>();
@@ -31,7 +32,6 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
 
     @Override
     public void flatMap1(OccCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
-//        System.out.println("人感接收时间:" + System.currentTimeMillis() + ";" + item.toString());
         Queue<OccCubeModels> occQueue = new LinkedList<>();
         if (occMap.containsKey(item.Key)) {
             occQueue = occMap.get(item.Key);
@@ -40,7 +40,8 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
         boolean lastOpen = false;
         if (lastOpeningAperture.containsKey(item.Key)) {
             lastOpenObject = lastOpeningAperture.get(item.Key);
-            lastOpen = lastOpenObject.OpeningAperture >= 0.5;
+            //开度大于5才认为是开启，小于5时认为已关闭
+            lastOpen = lastOpenObject.OpeningAperture >= 5;
         }
 
         //过时数据退队
@@ -63,8 +64,8 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
         }
         //当前人感为假，需要判断
         else {
-            //人感数据滞后于开度数据到达，因此，人感到达事件大于开度到达时间10s以上时才任务可能异常
-            if (lastOpen && lastOpenObject.Time.getTime() + 10 * 1000 < item.Time.getTime()) {
+            //人感数据滞后于开度数据到达，因此，人感到达事件大于开度到达时间60s以上时才任务可能异常
+            if (lastOpen && lastOpenObject.Time.getTime() + 60 * 1000 < item.Time.getTime()) {
                 boolean waitClose = unfinishedRecords.containsKey(item.Key);
                 //上一个开度值为真;没有需要等待关闭的异常事件;过去二十分钟没有人感为真的数据;发出报警
                 //if (lastOpen && waitClose && occQueue.isEmpty() && (programStart + 20 * 60 * 1000 < item.Time.getTime()))
@@ -78,7 +79,7 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
                             "照明系统",
                             item.Key,
                             operator,
-                            "",
+                            "programStartTime:" + programStart,
                             originalData);
                     unfinishedRecords.put(item.Key, record);
                     collector.collect(record);
@@ -89,10 +90,9 @@ public class OnlySensorCalculator implements CoFlatMapFunction<OccCubeModels, Op
 
     @Override
     public void flatMap2(OpeningApertureCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
-//        System.out.println("开度接收时间:" + System.currentTimeMillis() + ";" + item.toString());
         lastOpeningAperture.put(item.Key, item);
-        //有未结束的异常事件;开度小于0.5;尝试结束异常事件
-        if (unfinishedRecords.containsKey(item.Key) && item.OpeningAperture <= 0.5) {
+        //有未结束的异常事件;开度小于5;尝试结束异常事件
+        if (unfinishedRecords.containsKey(item.Key) && item.OpeningAperture < 5) {
             StrategyAbnormalRecord record = unfinishedRecords.get(item.Key);
             record.SetFinish(item.Time.getTime());
             record.SetCarbon(CalculateCarbonEmission(item.Key, 5 * 60 * 60), "kg");

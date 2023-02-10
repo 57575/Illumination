@@ -11,6 +11,7 @@ import java.util.List;
 
 public class OccRedisMapFunction implements FlatMapFunction<String, OccCubeModels> {
 
+    private static final long serialVersionUID = -878474245596830943L;
     private org.slf4j.Logger log;
     private List<String> keys;
 
