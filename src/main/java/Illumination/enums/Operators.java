@@ -1,7 +1,7 @@
 package Illumination.enums;
 
 public enum Operators {
-    onlyTimeSchedule,
-    onlySensorSchedule,
-    sensorAndTime;
+    仅排程,
+    仅传感器,
+    传感器和排程
 }

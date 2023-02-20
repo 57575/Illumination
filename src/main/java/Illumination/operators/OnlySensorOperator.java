@@ -11,6 +11,7 @@ import Illumination.models.orgins.OpeningApertureCubeModels;
 import Illumination.models.outputs.StrategyAbnormalRecord;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
@@ -18,12 +19,11 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-public class SensorAndTimeOperator {
+public class OnlySensorOperator {
+
     private static String taskId;
     private static String operatorName;
 
@@ -48,20 +48,16 @@ public class SensorAndTimeOperator {
     private static String templateId;
     private static String warningHost;
 
-    //排程参数
-    private static int hourStart;
-    private static int hourEnd;
-    private static int minuteStart;
-    private static int minuteEnd;
+    public static void Run(ExternalTask parameters) {
+        Logger logger = LoggerFactory.getLogger("Illumination-logs-" + parameters.TaskId);
 
-    public static void Run(ExternalTask parameter) {
-        Logger logger = LoggerFactory.getLogger("Illumination-logs-" + parameter.TaskId);
         //注册参数
         try {
-            GetParameters(parameter);
+            GetParameters(parameters);
         } catch (Exception e) {
             e.getMessage();
         }
+
         // 初始化流计算环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
@@ -81,7 +77,6 @@ public class SensorAndTimeOperator {
                 .name(taskId + "openingAperture")
                 .flatMap(new OpeningApertureRedisMapFunction(logger, sensorKeys))
                 .assignTimestampsAndWatermarks(WatermarkStrategy.<OpeningApertureCubeModels>forMonotonousTimestamps().withTimestampAssigner((e, t) -> e.Time.getTime()));
-
         DataStream<OccCubeModels> occDS = env
                 .addSource(new RedisSourceFunction(redisUrl, redisPassword, redisDb, renganKey, projectId, logger))
                 .name(taskId + "occ")
@@ -90,9 +85,8 @@ public class SensorAndTimeOperator {
 
         DataStream<StrategyAbnormalRecord> recordDataStream = occDS
                 .connect(openingApertureDS)
-                .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new SensorAndTimeCalculator(taskId, operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
-
+                .keyBy(x -> x.Key, x -> x.Key)
+                .flatMap(new OnlySensorCalculator(taskId, operatorName, sensorPower, carbonEmissionFactor));
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
         recordDataStream.addSink(new TableSinkFunction(
@@ -104,9 +98,8 @@ public class SensorAndTimeOperator {
                 templateId,
                 logger
         ));
-
         try {
-            env.execute("Illumination-analysis-" + parameter.TaskId);
+            env.execute("Illumination-analysis-" + parameters.TaskId);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -120,10 +113,6 @@ public class SensorAndTimeOperator {
             redisDb = parameters.OperatorParameter.getInteger("RedisDb");
             kaiduKey = parameters.OperatorParameter.getString("OpeningAperture");
             renganKey = parameters.OperatorParameter.getString("OccupancyCubeId");
-            hourStart = parameters.OperatorParameter.getInteger("HourStart");
-            hourEnd = parameters.OperatorParameter.getInteger("HourEnd");
-            minuteStart = parameters.OperatorParameter.getInteger("MinuteStart");
-            minuteEnd = parameters.OperatorParameter.getInteger("MinuteEnd");
             projectId = parameters.ProjectId;
             cubeHost = System.getenv("WEB_URL");
             cubeId = parameters.OperatorParameter.getString("CubeId");

@@ -13,7 +13,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import java.io.IOException;
 import java.time.Duration;
 
-public class SourceFunction {
+public class KafkaSourceFunction {
     public static DataStream<JSONObject> GetSource(StreamExecutionEnvironment env, String kafkaServer, String topic, String group, String watermarkProName) {
         KafkaSource<JSONObject> sourceBuilder = KafkaSource.<JSONObject>builder()
                 .setBootstrapServers(kafkaServer)

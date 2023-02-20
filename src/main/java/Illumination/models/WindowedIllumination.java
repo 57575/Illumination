@@ -6,7 +6,6 @@ public class WindowedIllumination {
     public String Name;
     public long TimeStamp;
     public String TimeStr;
-
     public boolean IsWarning;
     /**
      * 应当包括
@@ -15,8 +14,10 @@ public class WindowedIllumination {
      * <p>SensorLUX        照度,double;</p>
      */
     public JSONObject OriginalData;
-
     public String Message;
+
+    public long FirstOpenTime;
+    public String Strategy;
 
     public WindowedIllumination() {
         Name = "";
@@ -25,18 +26,15 @@ public class WindowedIllumination {
         IsWarning = false;
         OriginalData = new JSONObject();
         Message = "";
+        FirstOpenTime = 0;
+        Strategy = "";
     }
 
     /**
-     * 计算开度的均值并赋值
+     * 开度值，总是采用最后一个数据
      */
     public void SetOpeningApertureValue(double value) {
-        if (OriginalData.containsKey("OpeningAperture")) {
-            double last = OriginalData.getDouble("OpeningAperture");
-            OriginalData.put("OpeningAperture", (value + last) / 2);
-        } else {
-            OriginalData.put("OpeningAperture", value);
-        }
+        OriginalData.put("OpeningAperture", value);
     }
 
     /**
@@ -79,8 +77,24 @@ public class WindowedIllumination {
     }
 
     public void AppendMessage(String m) {
-        Message.concat("|").concat(m);
+        Message = Message.isEmpty() ? m : Message.concat("|").concat(m);
     }
 
+    public void SetOpenAndTime(double value, long time) {
+        OriginalData.put("OpeningAperture", value);
+    }
+
+    public void setFirstOpenTime(long firstOpenTime) {
+        FirstOpenTime = firstOpenTime;
+    }
+
+    public void setStrategy(String strategy) {
+        Strategy = strategy;
+    }
+
+    @Override
+    public String toString() {
+        return com.alibaba.fastjson.JSONObject.toJSONString(this);
+    }
 
 }

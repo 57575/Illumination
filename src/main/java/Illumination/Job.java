@@ -1,28 +1,62 @@
 package Illumination;
 
 import Illumination.models.ExternalTask;
+import Illumination.operators.OnlySensorOperator;
+import Illumination.operators.OnlyTimeOperator;
+import Illumination.operators.SensorAndTimeCalculator;
 import Illumination.operators.SensorAndTimeOperator;
-import Illumination.utils.PostMessage;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
+
+import java.util.*;
 
 
 public class Job {
 
     public static void main(String[] args) throws Exception {
+
         ExternalTask parameters = GetParameters(args);
+        GetSensorsPower(parameters);
         switch (parameters.Operator) {
-            case onlyTimeSchedule:
+            case 仅排程:
+                OnlyTimeOperator.Run(parameters);
                 break;
-            case onlySensorSchedule:
+            case 仅传感器:
+                OnlySensorOperator.Run(parameters);
                 break;
-            case sensorAndTime:
-//                SensorAndTimeOperator.Run(parameters);
-                PostMessage.PostWarningMessage("4F", "测试发送message", 1669267795341L);
+            case 传感器和排程:
+                SensorAndTimeOperator.Run(parameters);
                 break;
             default:
                 break;
+        }
+    }
+
+    private static void GetSensorsPower(ExternalTask parameters) throws Exception {
+        String route = "/api/datapipeline/projects/" + parameters.ProjectId + "/data/dim/" + parameters.CarbonEmission.getString("DimensionId");
+        String url = System.getenv("WEB_URL") + route;
+        HttpResponse<String> result = Unirest.get(url).asString();
+        if (!result.isSuccess()) throw new Exception("无法查询照明传感器详情,status:" + result.getStatus());
+        Map<String, Double> sensorPower = new HashMap<>();
+        List<JSONObject> allSensors = JSONArray.parseArray(result.getBody()).toJavaList(JSONObject.class);
+        List<String> effectiveSensors = parameters.OpeningApertureList.toJavaList(String.class);
+        for (JSONObject sensor : allSensors) {
+            String key = sensor.getString("_key");
+            if (effectiveSensors.contains(key)) {
+                double p = 0;
+                Double power = sensor.getDouble("power");
+                if (power instanceof Number) {
+                    p = power.doubleValue();
+                }
+                sensorPower.put(key, p);
+            }
+        }
+        parameters.SetSensorPower(sensorPower);
+
+        if (effectiveSensors.size() != sensorPower.size()) {
+            throw new Exception("查询得到的照明传感器与该策略配置的不一致");
         }
 
     }
@@ -39,10 +73,8 @@ public class Job {
         if (task == null) throw new Exception("无法查询任务详情,body:" + result.getBody());
         ExternalTask parameters = task.getJSONObject("parametersJson").toJavaObject(ExternalTask.class);
         parameters.TaskId = task.getString("id");
-
-        //注册消息推送的参数
-        PostMessage.SetWarningParameters(parameters.Warning);
-
+        parameters.FlinkId = System.getenv("FLINK_ID");
+        parameters.FlinkSecret = System.getenv("FLINK_SECRET");
         return parameters;
     }
 
