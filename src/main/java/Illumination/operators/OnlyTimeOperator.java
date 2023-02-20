@@ -82,7 +82,7 @@ public class OnlyTimeOperator {
 
         DataStream<StrategyAbnormalRecord> recordDataStream = openingApertureDS
                 .keyBy(x -> x.Key)
-                .flatMap(new OnlyTimeCalculator(operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
+                .flatMap(new OnlyTimeCalculator(taskId, operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
         recordDataStream.addSink(new TableSinkFunction(

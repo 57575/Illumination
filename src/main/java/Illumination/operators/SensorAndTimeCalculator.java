@@ -4,17 +4,22 @@ import Illumination.models.orgins.OccCubeModels;
 import Illumination.models.orgins.OpeningApertureCubeModels;
 import Illumination.models.outputs.StrategyAbnormalRecord;
 import com.alibaba.fastjson.JSONObject;
-import org.apache.flink.streaming.api.functions.co.CoFlatMapFunction;
+import org.apache.flink.api.common.state.MapState;
+import org.apache.flink.api.common.state.MapStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.co.RichCoFlatMapFunction;
 import org.apache.flink.util.Collector;
 
 import java.util.*;
 
-public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels, OpeningApertureCubeModels, StrategyAbnormalRecord> {
+public class SensorAndTimeCalculator extends RichCoFlatMapFunction<OccCubeModels, OpeningApertureCubeModels, StrategyAbnormalRecord> {
     private static final long serialVersionUID = -1203496215980446751L;
     //匹配队列
-    private final Map<String, Queue<OccCubeModels>> occMap;
-    private final Map<String, OpeningApertureCubeModels> lastOpeningAperture;
-    private final Map<String, StrategyAbnormalRecord> unfinishedRecords;
+    private MapState<String, Queue<OccCubeModels>> occMap;
+    private MapState<String, OpeningApertureCubeModels> lastOpeningAperture;
+    private MapState<String, StrategyAbnormalRecord> unfinishedRecords;
     //
     private final long programStart;
     private final String operator;
@@ -26,8 +31,10 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
     private final int minuteStart;
     private final int minuteEnd;
 
+    private String taskId;
 
     public SensorAndTimeCalculator(
+            String taskId,
             String operatorName,
             Map<String, Double> sensorPower,
             double carbonEmissionFactor,
@@ -36,9 +43,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
             int minuteStart,
             int minuteEnd
     ) {
-        occMap = new HashMap<>();
-        lastOpeningAperture = new HashMap<>();
-        unfinishedRecords = new HashMap<>();
+        this.taskId = taskId;
         this.programStart = System.currentTimeMillis();
         this.operator = operatorName;
         this.sensorPower = sensorPower;
@@ -50,14 +55,48 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
     }
 
     @Override
+    public void open(Configuration parameters) throws Exception {
+        super.open(parameters);
+        MapStateDescriptor<String, Queue<OccCubeModels>> occMapState
+                = new MapStateDescriptor<String, Queue<OccCubeModels>>(
+                taskId + "occMap",
+                TypeInformation.of(new TypeHint<String>() {
+                }),
+                TypeInformation.of(new TypeHint<Queue<OccCubeModels>>() {
+                })
+        );
+        occMap = getRuntimeContext().getMapState(occMapState);
+
+        MapStateDescriptor<String, OpeningApertureCubeModels> lastOpeningApertureMap
+                = new MapStateDescriptor<String, OpeningApertureCubeModels>(
+                taskId + "lastOAMap",
+                TypeInformation.of(new TypeHint<String>() {
+                }),
+                TypeInformation.of(new TypeHint<OpeningApertureCubeModels>() {
+                })
+        );
+        lastOpeningAperture = getRuntimeContext().getMapState(lastOpeningApertureMap);
+
+        MapStateDescriptor<String, StrategyAbnormalRecord> unfinishedRecordMap
+                = new MapStateDescriptor<String, StrategyAbnormalRecord>(
+                taskId + "lastUnfinishedRecordMap",
+                TypeInformation.of(new TypeHint<String>() {
+                }),
+                TypeInformation.of(new TypeHint<StrategyAbnormalRecord>() {
+                })
+        );
+        unfinishedRecords = getRuntimeContext().getMapState(unfinishedRecordMap);
+    }
+
+    @Override
     public void flatMap1(OccCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
         Queue<OccCubeModels> occQueue = new LinkedList<>();
-        if (occMap.containsKey(item.Key)) {
+        if (occMap.contains(item.Key)) {
             occQueue = occMap.get(item.Key);
         }
         OpeningApertureCubeModels lastOpenObject = new OpeningApertureCubeModels();
         boolean lastOpenValue = false;
-        if (lastOpeningAperture.containsKey(item.Key)) {
+        if (lastOpeningAperture.contains(item.Key)) {
             lastOpenObject = lastOpeningAperture.get(item.Key);
             //开度大于5才认为是开启
             lastOpenValue = lastOpenObject.OpeningAperture >= 5;
@@ -68,7 +107,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
             occQueue.remove();
         }
 
-        boolean waitClose = unfinishedRecords.containsKey(item.Key);
+        boolean waitClose = unfinishedRecords.contains(item.Key);
         //当前人感为真,人感入队，并尝试结束未结束事件
         if (item.Occupancy) {
             occQueue.add(item);
@@ -97,7 +136,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
                 originalData.put("Occupancy", item);
                 StrategyAbnormalRecord record = new StrategyAbnormalRecord(
                         item.Time.getTime(),
-                        "无人值守",
+                        "非工作时间无人状态下开启照明",
                         "照明系统",
                         item.Key,
                         operator,
@@ -113,7 +152,7 @@ public class SensorAndTimeCalculator implements CoFlatMapFunction<OccCubeModels,
     public void flatMap2(OpeningApertureCubeModels item, Collector<StrategyAbnormalRecord> collector) throws Exception {
         lastOpeningAperture.put(item.Key, item);
         //有未结束的异常事件;开度小于5;尝试结束异常事件
-        if (unfinishedRecords.containsKey(item.Key) && item.OpeningAperture < 5) {
+        if (unfinishedRecords.contains(item.Key) && item.OpeningAperture < 5) {
             StrategyAbnormalRecord record = unfinishedRecords.get(item.Key);
             record.SetFinish(item.Time.getTime());
             record.SetCarbon(CalculateCarbonEmission(item.Key, CalculateNextStartGap(item.Time.getTime())), "kg");

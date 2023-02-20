@@ -5,15 +5,24 @@ import Illumination.models.orgins.OpeningApertureCubeModels;
 import Illumination.models.outputs.StrategyAbnormalRecord;
 import com.alibaba.fastjson.JSONObject;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.util.Collector;
 
 import java.util.*;
 
-public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeModels, StrategyAbnormalRecord> {
+public class OnlyTimeCalculator extends RichFlatMapFunction<OpeningApertureCubeModels, StrategyAbnormalRecord> implements CheckpointedFunction {
 
     private static final long serialVersionUID = 1213564612667547735L;
     //匹配队列
-    private final Map<String, StrategyAbnormalRecord> unfinishedRecords;
+    Map<String, StrategyAbnormalRecord> unfinishedRecords;
+    private transient ListState<StrategyAbnormalRecord> unfinishedRecordState;
     //
     private final String operator;
     private final Map<String, Double> sensorPower;
@@ -24,7 +33,10 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
     private final int minuteStart;
     private final int minuteEnd;
 
+    String taskId;
+
     public OnlyTimeCalculator(
+            String taskId,
             String operatorName,
             Map<String, Double> sensorPower,
             double carbonEmissionFactor,
@@ -33,6 +45,7 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
             int minuteStart,
             int minuteEnd
     ) {
+        this.taskId = taskId;
         unfinishedRecords = new HashMap<>();
         this.operator = operatorName;
         this.sensorPower = sensorPower;
@@ -41,6 +54,31 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
         this.hourEnd = hourEnd;
         this.minuteStart = minuteStart;
         this.minuteEnd = minuteEnd;
+    }
+
+    @Override
+    public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
+        unfinishedRecordState.clear();
+        for (StrategyAbnormalRecord record : unfinishedRecords.values()) {
+            unfinishedRecordState.add(record);
+        }
+    }
+
+    @Override
+    public void initializeState(FunctionInitializationContext context) throws Exception {
+        ListStateDescriptor<StrategyAbnormalRecord> listStateDescriptor
+                = new ListStateDescriptor<StrategyAbnormalRecord>(
+                taskId + "unfinishedRecords",
+                TypeInformation.of(new TypeHint<StrategyAbnormalRecord>() {
+                })
+        );
+        unfinishedRecordState = context.getOperatorStateStore().getListState(listStateDescriptor);
+
+        if (context.isRestored()) {
+            for (StrategyAbnormalRecord record : unfinishedRecordState.get()) {
+                unfinishedRecords.put(record.SensorKey, record);
+            }
+        }
     }
 
     @Override
@@ -54,7 +92,7 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
                 originalData.put("OpeningAperture", item);
                 StrategyAbnormalRecord record = new StrategyAbnormalRecord(
                         item.Time.getTime(),
-                        "不在排程内",
+                        "非工作时间开启照明",
                         "照明系统",
                         item.Key,
                         operator,
@@ -130,4 +168,6 @@ public class OnlyTimeCalculator implements FlatMapFunction<OpeningApertureCubeMo
         }
         return true;
     }
+
+
 }

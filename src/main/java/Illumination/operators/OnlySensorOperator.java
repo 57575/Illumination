@@ -11,6 +11,7 @@ import Illumination.models.orgins.OpeningApertureCubeModels;
 import Illumination.models.outputs.StrategyAbnormalRecord;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
@@ -84,8 +85,8 @@ public class OnlySensorOperator {
 
         DataStream<StrategyAbnormalRecord> recordDataStream = occDS
                 .connect(openingApertureDS)
-                .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new OnlySensorCalculator(operatorName, sensorPower, carbonEmissionFactor));
+                .keyBy(x -> x.Key, x -> x.Key)
+                .flatMap(new OnlySensorCalculator(taskId, operatorName, sensorPower, carbonEmissionFactor));
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
         recordDataStream.addSink(new TableSinkFunction(

@@ -56,7 +56,6 @@ public class SensorAndTimeOperator {
 
     public static void Run(ExternalTask parameter) {
         Logger logger = LoggerFactory.getLogger("Illumination-logs-" + parameter.TaskId);
-
         //注册参数
         try {
             GetParameters(parameter);
@@ -92,7 +91,7 @@ public class SensorAndTimeOperator {
         DataStream<StrategyAbnormalRecord> recordDataStream = occDS
                 .connect(openingApertureDS)
                 .keyBy(occ -> occ.Key, open -> open.Key)
-                .flatMap(new SensorAndTimeCalculator(operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
+                .flatMap(new SensorAndTimeCalculator(taskId, operatorName, sensorPower, carbonEmissionFactor, hourStart, hourEnd, minuteStart, minuteEnd));
 
 
         recordDataStream.addSink(new RedisSinkFunction(redisUrl, redisPassword, redisDb, cubeId, projectId, logger));
